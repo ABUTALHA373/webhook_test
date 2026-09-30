@@ -22,6 +22,7 @@ class Endpoint extends Model
         'response_headers',
         'response_body',
         'conditional_rules',
+        'required_params',
         'is_active',
     ];
 
@@ -35,6 +36,7 @@ class Endpoint extends Model
             'response_delay_ms' => 'integer',
             'response_headers' => 'array',
             'conditional_rules' => 'array',
+            'required_params' => 'array',
             'is_active' => 'boolean',
         ];
     }

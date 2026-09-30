@@ -3,15 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HookForge &bull; Dynamic Webhook Testing &amp; Callback Engine</title>
+  <title>HookForge • Dynamic Webhook Testing & Callback Engine</title>
   <meta name="description" content="Production-grade dynamic webhook testing, inspection, and automated outbound callback simulation platform.">
-  
-  <!-- Modern Typography: Inter & JetBrains Mono -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="/css/app.css">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('hookforge_theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
 </head>
 <body>
 
@@ -33,44 +38,35 @@
       </div>
     </div>
 
-    <!-- Active Endpoint Selector & Quick Copy Pill -->
+    <!-- Header Actions (Theme Switcher) -->
     <div class="header-actions">
-      <div class="endpoint-picker-box">
-        <span class="endpoint-label">Active Sink:</span>
-        <select id="endpointSelect" class="endpoint-select" aria-label="Select Active Endpoint">
-          <option value="all">⚡ All Endpoints</option>
-        </select>
-      </div>
-
-      <div id="endpointUrlPill" class="url-copy-pill" title="Click to copy public webhook URL">
-        <span id="endpointUrlText">{{ url('/hook/default') }}</span>
-        <span>📋</span>
-      </div>
+      <button id="btnThemeToggle" class="btn-theme-toggle" title="Toggle Light/Dark Theme">
+        <svg id="themeIconSun" style="display:none;" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+        <svg id="themeIconMoon" viewBox="0 0 24 24"><path d="M12.3 2a10 10 0 0 0-.19 14 9.92 9.92 0 0 0 7.9 3.89c.35 0 .69-.03 1.03-.07A10 10 0 1 1 12.3 2z"/></svg>
+      </button>
     </div>
   </header>
 
   <!-- Navigation Bar -->
   <nav class="app-nav">
     <button class="nav-tab active" data-tab="tab-inspector">
-      <span>⚡ Live Requests</span>
+      <span>Live Requests</span>
       <span id="reqCountBadge" class="nav-tab-badge">0</span>
     </button>
-    <button class="nav-tab" data-tab="tab-endpoints">
-      <span>⚙️ Endpoints &amp; Rules</span>
+    <button class="nav-tab" data-tab="tab-webhooks">
+      <span>Webhook Endpoints</span>
     </button>
     <button class="nav-tab" data-tab="tab-callbacks">
-      <span>🔄 Callbacks &amp; Relays</span>
+      <span>Callback Rules</span>
     </button>
     <button class="nav-tab" data-tab="tab-dispatcher">
-      <span>🚀 Outbound Dispatcher</span>
-    </button>
-    <button class="nav-tab" data-tab="tab-docs">
-      <span>📖 API &amp; cURL Recipes</span>
+      <span>Outbound Dispatcher</span>
     </button>
   </nav>
 
   <!-- Main Body Content Area -->
   <main class="app-body">
+
     <!-- ====================================================================
          TAB 1: LIVE REQUESTS INSPECTOR (2-Pane Split)
          ==================================================================== -->
@@ -79,6 +75,50 @@
         <!-- Left Pane: Incoming Requests Feed -->
         <aside class="requests-feed">
           <div class="feed-toolbar">
+            <!-- Dedicated Endpoint Filter (Custom Dropdown) -->
+            <div class="feed-endpoint-filter">
+              <div class="feed-ep-header">
+                <span>Endpoint Filter</span>
+                <span id="feedEndpointCountBadge" class="feed-ep-badge">All</span>
+              </div>
+
+              <!-- Custom Dropdown Container -->
+              <div class="custom-dropdown" id="feedEndpointCustomDropdown">
+                <button type="button" class="custom-dropdown-trigger" id="feedEndpointDropdownBtn" aria-haspopup="listbox" aria-expanded="false">
+                  <div class="custom-dropdown-content">
+                    <span class="custom-dropdown-title" id="feedDropdownTitle">All Endpoints</span>
+                    <span class="custom-dropdown-subtitle" id="feedDropdownSubtitle">All incoming traffic</span>
+                  </div>
+                  <div class="custom-dropdown-meta">
+                    <span class="custom-dropdown-badge" id="feedDropdownBadge">0</span>
+                    <svg class="custom-dropdown-chevron" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                    </svg>
+                  </div>
+                </button>
+                <div class="custom-dropdown-menu" id="feedDropdownMenu" role="listbox">
+                  <!-- Dynamically populated by JS -->
+                </div>
+              </div>
+
+              <!-- Native select preserved for syncing -->
+              <select id="feedEndpointSelect" style="display:none;">
+                <option value="all">All Endpoints</option>
+              </select>
+            </div>
+
+            <!-- Active Endpoint Direct Webhook URL Bar -->
+            <div id="feedEndpointUrlBar" class="feed-endpoint-banner" style="display:none;">
+              <span id="feedEndpointUrlText" class="feed-url-text code-font"></span>
+              <button type="button" id="btnCopyFeedUrl" class="btn-copy-feed-url" title="Copy Webhook URL">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Copy</span>
+              </button>
+            </div>
+
             <div class="search-box">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               <input type="text" id="searchFilter" placeholder="Filter by path, payload keyword, ID..." autocomplete="off">
@@ -95,7 +135,7 @@
               </div>
 
               <button id="btnClearFeed" class="btn-clear-feed" title="Clear captured requests">
-                <span>🗑️</span> Clear
+                Clear
               </button>
             </div>
           </div>
@@ -110,6 +150,9 @@
             </svg>
             <p><strong>Waiting for incoming webhooks...</strong></p>
             <p style="font-size: 0.78rem;">Send any HTTP request to the webhook URL above, or use the <strong>Outbound Dispatcher</strong> to fire test events.</p>
+            <button id="btnQuickMockEmpty" class="btn-quick-mock" style="margin-top: 14px;">
+              Send Sample Webhook
+            </button>
           </div>
         </aside>
 
@@ -136,7 +179,7 @@
               <div class="details-actions">
                 <button id="btnCopyCurl" class="btn btn-secondary" title="Copy as cURL command">cURL</button>
                 <button id="btnCopyFetch" class="btn btn-secondary" title="Copy as JS Fetch snippet">Fetch</button>
-                <button id="btnReplayModal" class="btn btn-primary" title="Replay this request">🔄 Replay</button>
+                <button id="btnReplayModal" class="btn btn-primary" title="Replay this request">Replay</button>
                 <button id="btnDeleteReq" class="btn btn-danger" title="Delete request">Delete</button>
               </div>
             </div>
@@ -221,53 +264,379 @@
     </div>
 
     <!-- ====================================================================
-         TAB 2: ENDPOINTS & RESPONSE CONFIGURATOR
+         TAB 2: WEBHOOK ENDPOINTS — Full Management
          ==================================================================== -->
-    <div id="tab-endpoints" class="tab-pane">
+    <div id="tab-webhooks" class="tab-pane">
       <div class="full-tab-view">
         <div class="view-container">
+
+          <!-- Header -->
           <div class="view-header">
             <div class="view-title-group">
-              <h2>Webhook Endpoints &amp; Dynamic Rules</h2>
-              <p>Create distinct endpoints with custom status codes, artificial latency simulation, and dynamic templated responses.</p>
+              <h2>Webhook Endpoints</h2>
+              <p>Create webhook receivers with custom slugs, status codes, simulated latency, and fully dynamic response bodies powered by incoming request data.</p>
             </div>
-            <button id="btnOpenCreateEndpoint" class="btn btn-primary">+ Create New Endpoint</button>
+            <button id="btnOpenCreateEndpoint" class="btn btn-primary">+ New Endpoint</button>
           </div>
 
-          <div class="panel-card">
-            <table class="kv-table">
+          <!-- Endpoints Table -->
+          <div class="panel-card" id="endpointsPanelCard">
+            <table class="kv-table" id="endpointsTable">
               <thead>
                 <tr>
-                  <th>Endpoint Name</th>
-                  <th>Path</th>
-                  <th>Default Status</th>
-                  <th>Simulated Delay</th>
-                  <th>Requests Captured</th>
-                  <th>Actions</th>
+                  <th>Name</th>
+                  <th>URL / Slug</th>
+                  <th>Response</th>
+                  <th>Delay</th>
+                  <th>Requests</th>
+                  <th>Callbacks</th>
+                  <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody id="endpointsTableBody"></tbody>
             </table>
           </div>
+
+          <!-- Inline Endpoint Editor (hidden by default, shown on create/edit) -->
+          <div id="endpointEditorPanel" class="panel-card" style="display:none; margin-top:20px;">
+            <div class="editor-panel-header">
+              <h3 id="endpointEditorTitle" class="panel-title" style="margin:0;">Configure Endpoint</h3>
+              <button id="btnCloseEndpointEditor" class="btn btn-secondary" style="padding:4px 10px;">✕ Close</button>
+            </div>
+
+            <form id="formEndpointEditor" style="margin-top:20px;">
+              <input type="hidden" id="epEditorId" value="">
+
+              <div class="grid-3">
+                <div class="form-group">
+                  <label class="form-label">Endpoint Name <span style="color:var(--color-danger);">*</span></label>
+                  <input type="text" id="epEditorName" class="form-control" placeholder="e.g. GitHub Webhooks" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>Custom Slug</span>
+                    <span class="form-hint">Auto-generated if blank</span>
+                  </label>
+                  <input type="text" id="epEditorSlug" class="form-control code-font" placeholder="e.g. github-ci">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>Secret Token</span>
+                    <span class="form-hint">Optional HMAC verification</span>
+                  </label>
+                  <input type="text" id="epEditorSecret" class="form-control code-font" placeholder="whsec_...">
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <div class="form-group">
+                  <label class="form-label">Response Status</label>
+                  <input type="number" id="epEditorStatus" class="form-control" value="200" min="100" max="599">
+                  <span class="form-hint" style="margin-top:4px; display:block;">Supports dynamic token e.g. <code>@{{body.code||200}}</code></span>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Simulated Delay (ms)</label>
+                  <input type="number" id="epEditorDelay" class="form-control" value="0" min="0" max="30000">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>Custom Response Header</span>
+                    <span class="form-hint">Key: Value</span>
+                  </label>
+                  <input type="text" id="epEditorHeaderKV" class="form-control code-font" placeholder="X-Custom: @{{req.id}}">
+                </div>
+              </div>
+
+              <!-- Dynamic Response Body — with variable reference sidebar -->
+              <div class="grid-2" style="align-items:flex-start;">
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>Dynamic Response Body</span>
+                    <span class="form-hint">Use tokens to reference incoming request data</span>
+                  </label>
+                  <!-- Quick Insert Chips -->
+                  <div class="chips-row" style="margin-bottom:8px;">
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{req.id}}">req.id</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{req.method}}">req.method</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{timestamp_iso}}">timestamp</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{query.customer_id}}">query.customer_id</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{query.token}}">query.token</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{query.order_id}}">query.order_id</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{param.tier}}">param.tier</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{body.event}}">body.event</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{body.id}}">body.id</span>
+                    <span class="chip-tag" data-target="epEditorBody" data-var="@{{headers.x-token}}">header.x-token</span>
+                  </div>
+                  <textarea id="epEditorBody" class="form-control code-font" style="min-height:200px;">{
+  "status": "ok",
+  "request_id": "@{{req.id}}",
+  "method": "@{{req.method}}",
+  "received_params": {
+    "customer_id": "@{{query.customer_id || body.customer_id || 'none'}}",
+    "token": "@{{query.token || 'none'}}"
+  },
+  "received_at": "@{{timestamp_iso}}"
+}</textarea>
+                </div>
+
+                <!-- Variable Reference Card -->
+                <div class="var-reference-card">
+                  <div class="var-ref-title">Dynamic Variable Reference</div>
+                  <table class="var-ref-table">
+                    <tbody>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{query.param}}</code></td>
+                        <td class="var-ref-desc">Query string param (e.g. <code>?customer_id=12</code>)</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{param.name}}</code></td>
+                        <td class="var-ref-desc">Parameter from query string or body</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{query}}</code></td>
+                        <td class="var-ref-desc">All query params formatted as JSON</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{body.key}}</code></td>
+                        <td class="var-ref-desc">JSON body field (e.g. <code>body.user.name</code>)</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{headers.x-token}}</code></td>
+                        <td class="var-ref-desc">Incoming HTTP header value</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{req.id}}</code></td>
+                        <td class="var-ref-desc">Unique UUID assigned to request</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{req.ip}}</code></td>
+                        <td class="var-ref-desc">Sender IP address</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{timestamp_iso}}</code></td>
+                        <td class="var-ref-desc">Current ISO8601 server timestamp</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{val||default}}</code></td>
+                        <td class="var-ref-desc">Fallback value if token is missing</td>
+                      </tr>
+                      <tr>
+                        <td class="var-ref-token"><code>@{{upper(query.x)}}</code></td>
+                        <td class="var-ref-desc">Transform: <code>upper()</code>, <code>lower()</code>, <code>default()</code></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <!-- Live Eval Button -->
+                  <button type="button" id="btnRunEvalPlayground" class="btn btn-primary" style="width:100%; margin-top:12px;">Preview Response</button>
+                  <div id="evalPreviewBox" style="display:none; margin-top:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                      <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">EVALUATED STATUS:</span>
+                      <span id="evalResultStatus" class="badge-status status-2xx">HTTP 200</span>
+                    </div>
+                    <pre id="evalResultBody" class="code-pre" style="max-height:180px; overflow:auto; font-size:0.78rem;"></pre>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Required Parameters Builder -->
+              <div class="req-params-section">
+                <div class="req-params-header">
+                  <div>
+                    <div class="req-params-title">Required Parameters & Constraints</div>
+                    <div class="req-params-hint">Define parameters (from URL query string, request body, or headers) that MUST be present. If missing or invalid, returns HTTP 422 with validation errors and logs the request to the inspector. Click <strong>"Use in Response"</strong> to return any parameter in your dynamic response.</div>
+                  </div>
+                  <button type="button" id="btnAddReqParam" class="btn btn-secondary" style="font-size:0.8rem; white-space:nowrap;">+ Add Required Parameter</button>
+                </div>
+
+                <div id="reqParamsList" class="req-params-list">
+                  <!-- rows injected by JS -->
+                </div>
+
+                <!-- Empty state -->
+                <div id="reqParamsEmpty" class="req-params-empty">
+                  No required parameters — all incoming requests will be accepted regardless of content.
+                </div>
+              </div>
+
+              <div class="form-actions" style="margin-top:20px;">
+                <button type="submit" id="btnSubmitEndpointEditor" class="btn btn-primary">Save Endpoint</button>
+                <button type="button" id="btnCancelEndpointEditor" class="btn btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </div>
+
         </div>
       </div>
     </div>
 
     <!-- ====================================================================
-         TAB 3: DYNAMIC CALLBACKS & RELAYS
+         TAB 3: CALLBACK RULES — Separate & Full Management
          ==================================================================== -->
     <div id="tab-callbacks" class="tab-pane">
       <div class="full-tab-view">
         <div class="view-container">
+
+          <!-- Header -->
           <div class="view-header">
             <div class="view-title-group">
-              <h2>Automated Outbound Callbacks &amp; Relays</h2>
-              <p>Configure automated callbacks triggered whenever a webhook arrives. Supports dynamic URLs, payload transformation, HMAC signatures, and exponential retries.</p>
+              <h2>Callback Rules</h2>
+              <p>Configure automated outbound callbacks triggered on every incoming webhook. Each rule can forward, transform, sign with HMAC, and retry independently.</p>
             </div>
             <button id="btnOpenAddCallback" class="btn btn-primary">+ Add Callback Rule</button>
           </div>
 
+          <!-- Filter by endpoint -->
+          <div class="panel-card" style="padding:14px 20px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span style="font-size:0.84rem; font-weight:600; color:var(--text-secondary);">Filter by endpoint:</span>
+            <select id="callbackFilterEndpoint" class="form-control" style="max-width:280px;">
+              <option value="">All Endpoints</option>
+            </select>
+            <span id="callbackRuleCount" style="margin-left:auto; font-size:0.8rem; color:var(--text-muted);"></span>
+          </div>
+
+          <!-- Inline Callback Rule Editor (Positioned at top so it is immediately visible) -->
+          <div id="callbackEditorPanel" class="panel-card" style="display:none; margin-bottom:20px; border-left:4px solid var(--accent-primary);">
+            <div class="editor-panel-header">
+              <h3 id="callbackEditorTitle" class="panel-title" style="margin:0;">Configure Callback Rule</h3>
+              <button id="btnCloseCallbackEditor" class="btn btn-secondary" style="padding:4px 10px;">✕ Close</button>
+            </div>
+
+            <form id="formCallbackEditor" style="margin-top:20px;">
+              <input type="hidden" id="cbEditorId" value="">
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">Rule Name <span style="color:var(--color-danger);">*</span></label>
+                  <input type="text" id="cbEditorName" class="form-control" placeholder="e.g. Payment Microservice Relay" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Attached Endpoint <span style="color:var(--color-danger);">*</span></label>
+                  <select id="cbEditorEndpointId" class="form-control" required></select>
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <div class="form-group">
+                  <label class="form-label">HTTP Method</label>
+                  <select id="cbEditorMethod" class="form-control">
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="GET">GET</option>
+                    <option value="DELETE">DELETE</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Delay (seconds)</label>
+                  <input type="number" id="cbEditorDelay" class="form-control" value="0" min="0" max="300">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max Retries</label>
+                  <input type="number" id="cbEditorRetries" class="form-control" value="3" min="0" max="10">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  <span>Target URL <span style="color:var(--color-danger);">*</span></span>
+                  <span class="form-hint">Supports dynamic tokens — e.g. <code>@{{body.callback_url}}</code> or <code>https://api.myapp.com/@{{query.tenant}}</code></span>
+                </label>
+                <input type="text" id="cbEditorTargetUrl" class="form-control code-font" placeholder="https://api.myapp.com/hooks or @{{body.callback_url}}" required>
+              </div>
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>Custom HTTP Headers (Optional)</span>
+                    <span class="form-hint">Format: <code>Header: Value</code> (one per line)</span>
+                  </label>
+                  <textarea id="cbEditorCustomHeaders" class="form-control code-font" style="min-height:80px;" placeholder="Authorization: Bearer @{{headers.x-token}}
+X-Source: HookForge-Relay"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Payload Mode</label>
+                  <select id="cbEditorPayloadMode" class="form-control">
+                    <option value="template">Custom JSON Template</option>
+                    <option value="passthrough">Passthrough (Forward exact incoming body)</option>
+                    <option value="empty">Empty Body</option>
+                  </select>
+                  <span class="form-hint" style="margin-top:6px; display:block;">Passthrough forwards the raw incoming payload exactly as received.</span>
+                </div>
+              </div>
+
+              <div class="form-group" id="cbTemplateGroup">
+                <label class="form-label">
+                  <span>Payload Template</span>
+                  <span class="form-hint">Use <code>@{{body.x}}</code>, <code>@{{req.id}}</code>, <code>@{{headers.x-token}}</code>, <code>@{{query.token}}</code>, etc.</span>
+                </label>
+                <div class="chips-row" style="margin-bottom:8px;">
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{req.id}}">req.id</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{timestamp_iso}}">timestamp</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{body.event}}">body.event</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{body.id}}">body.id</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{body}}">full body</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{query.customer_id}}">query.customer_id</span>
+                  <span class="chip-tag" data-target="cbEditorTemplate" data-var="@{{headers.x-request-id}}">header</span>
+                </div>
+                <textarea id="cbEditorTemplate" class="form-control code-font" style="min-height:130px;">{
+  "event": "WEBHOOK_RELAY",
+  "source_request_id": "@{{req.id}}",
+  "processed_at": "@{{timestamp_iso}}",
+  "data": @{{body}}
+}</textarea>
+              </div>
+
+              <!-- HMAC Signature Section -->
+              <div class="form-group" style="background:var(--bg-canvas); padding:14px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:10px;">
+                  <input type="checkbox" id="cbEditorHmacEnabled">
+                  <span style="font-size:0.9rem; font-weight:600;">Sign Outbound Request with HMAC</span>
+                </label>
+                <div id="cbHmacFields" style="display:none;">
+                  <div class="grid-3">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label">HMAC Secret</label>
+                      <input type="text" id="cbEditorHmacSecret" class="form-control code-font" placeholder="whsec_...">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label">Algorithm</label>
+                      <select id="cbEditorHmacAlgo" class="form-control">
+                        <option value="sha256">SHA-256</option>
+                        <option value="sha1">SHA-1</option>
+                        <option value="sha512">SHA-512</option>
+                        <option value="md5">MD5</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label">Signature Header</label>
+                      <input type="text" id="cbEditorHmacHeader" class="form-control code-font" value="X-Signature-256">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Preview Resolution Box -->
+              <div style="margin-top:14px;">
+                <button type="button" id="btnPreviewCallback" class="btn btn-secondary" style="font-size:0.82rem;">Test Dynamic Resolution</button>
+                <div id="cbPreviewBox" style="display:none; margin-top:12px; background:var(--bg-canvas); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                  <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;">Resolved Outbound URL:</div>
+                  <div id="cbPreviewUrl" class="code-font" style="color:var(--color-info); word-break:break-all; margin-bottom:10px; font-size:0.85rem;"></div>
+                  <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;">Resolved Payload:</div>
+                  <pre id="cbPreviewPayload" class="code-pre" style="max-height:160px; overflow:auto; font-size:0.78rem;"></pre>
+                </div>
+              </div>
+
+              <div class="form-actions" style="margin-top:20px;">
+                <button type="submit" id="btnSubmitCallbackEditor" class="btn btn-primary">Save Callback Rule</button>
+                <button type="button" id="btnCancelCallbackEditor" class="btn btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Callback Rules List -->
           <div id="callbacksListContainer" style="display:flex; flex-direction:column; gap:16px;"></div>
+
         </div>
       </div>
     </div>
@@ -280,7 +649,7 @@
         <div class="view-container">
           <div class="view-header">
             <div class="view-title-group">
-              <h2>Outbound Webhook Dispatcher &amp; Event Generator</h2>
+              <h2>Outbound Webhook Dispatcher</h2>
               <p>Simulate real-world webhooks (Stripe, GitHub, Shopify, Slack) or send custom JSON events to test your local/remote microservices.</p>
             </div>
           </div>
@@ -334,8 +703,8 @@
               </div>
 
               <div style="display:flex; gap:10px; margin-top:16px;">
-                <button id="btnSendDispatch" class="btn btn-primary" style="flex:1;">🚀 Send Webhook</button>
-                <button id="btnSendBurst" class="btn btn-secondary" title="Send 5 requests in succession">⚡ Burst Test (5x)</button>
+                <button id="btnSendDispatch" class="btn btn-primary" style="flex:1;">Send Webhook</button>
+                <button id="btnSendBurst" class="btn btn-secondary" title="Send 5 requests in succession">Burst Test (5x)</button>
               </div>
             </div>
 
@@ -362,232 +731,12 @@
       </div>
     </div>
 
-    <!-- ====================================================================
-         TAB 5: API DOCUMENTATION & cURL RECIPES
-         ==================================================================== -->
-    <div id="tab-docs" class="tab-pane">
-      <div class="full-tab-view">
-        <div class="view-container">
-          <div class="view-header">
-            <div class="view-title-group">
-              <h2>Developer API &amp; cURL Recipes</h2>
-              <p>Copy-paste ready recipes to integrate and test HookForge with your favorite programming languages.</p>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3 class="panel-title">cURL Recipe: Standard Webhook</h3>
-            <div class="code-container">
-              <pre class="code-pre">curl -X POST "{{ url('/hook/default') }}" \
-  -H "Content-Type: application/json" \
-  -H "X-Custom-Token: client-token-884" \
-  -d '{
-    "event": "order.completed",
-    "id": "ord_992819",
-    "amount": 149.50,
-    "callback_url": "https://httpbin.org/post"
-  }'</pre>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3 class="panel-title">cURL Recipe: Dynamic Callback Trigger</h3>
-            <p style="color:var(--text-secondary); font-size:0.84rem; margin-bottom:12px;">
-              Include a <code>callback_url</code> in your payload. The <strong>Echo Callback</strong> rule configured on <code>default</code> will automatically relay a transformed, HMAC-signed event to that URL!
-            </p>
-            <div class="code-container">
-              <pre class="code-pre">curl -X POST "{{ url('/hook/default') }}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event": "payment.succeeded",
-    "id": "pay_554422",
-    "callback_url": "{{ url('/hook/stripe-mock') }}"
-  }'</pre>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3 class="panel-title">Python Requests Recipe</h3>
-            <div class="code-container">
-              <pre class="code-pre">import requests
-
-url = "{{ url('/hook/default') }}"
-payload = {
-    "event": "invoice.paid",
-    "id": "inv_7721",
-    "customer": "cus_99182"
-}
-headers = {"Content-Type": "application/json"}
-
-response = requests.post(url, json=payload, headers=headers)
-print(f"Status: {response.status_code}")
-print(response.json())</pre>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <h3 class="panel-title">Dynamic Variable Reference</h3>
-            <table class="kv-table">
-              <thead><tr><th>Variable Token</th><th>Description / Example</th></tr></thead>
-              <tbody>
-                <tr><td class="kv-key"><code>@{{req.id}}</code></td><td class="kv-val">Unique UUID assigned to the incoming webhook request</td></tr>
-                <tr><td class="kv-key"><code>@{{req.ip}}</code></td><td class="kv-val">Remote client IP address</td></tr>
-                <tr><td class="kv-key"><code>@{{timestamp_iso}}</code></td><td class="kv-val">Current ISO8601 timestamp (e.g. 2026-09-30T05:00:00Z)</td></tr>
-                <tr><td class="kv-key"><code>@{{body.path.to.key}}</code></td><td class="kv-val">Nested property from incoming JSON body (e.g. <code>body.data.id</code>)</td></tr>
-                <tr><td class="kv-key"><code>@{{headers.header_name}}</code></td><td class="kv-val">Value of an incoming HTTP header (e.g. <code>headers.x-request-id</code>)</td></tr>
-                <tr><td class="kv-key"><code>@{{query.param_name}}</code></td><td class="kv-val">Query string parameter (e.g. <code>?token=abc</code> -> <code>query.token</code>)</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
   </main>
 </div>
 
 <!-- ====================================================================
      MODALS
      ==================================================================== -->
-
-<!-- Modal: Create Endpoint -->
-<div id="modalCreateEndpoint" class="modal-backdrop">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3 class="modal-title">Create Webhook Endpoint</h3>
-      <button class="modal-close">&times;</button>
-    </div>
-    <form id="formCreateEndpoint">
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Endpoint Name</label>
-          <input type="text" name="name" class="form-control" placeholder="e.g. GitHub Webhooks" required>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            <span>Custom Slug (Optional)</span>
-            <span class="form-hint">Leave blank to auto-generate</span>
-          </label>
-          <input type="text" name="slug" class="form-control code-font" placeholder="e.g. github-ci">
-        </div>
-
-        <div class="grid-2">
-          <div class="form-group">
-            <label class="form-label">Response Status</label>
-            <input type="number" name="response_status" class="form-control" value="200" min="100" max="599">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Simulated Delay (ms)</label>
-            <input type="number" name="response_delay_ms" class="form-control" value="0" min="0" max="30000">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            <span>Dynamic Response Body</span>
-            <span class="form-hint">Supports variable interpolation</span>
-          </label>
-          <div class="chips-row">
-            <span class="chip-tag" data-target="epBodyInput" data-var="@{{req.id}}">+ req.id</span>
-            <span class="chip-tag" data-target="epBodyInput" data-var="@{{timestamp_iso}}">+ timestamp</span>
-            <span class="chip-tag" data-target="epBodyInput" data-var="@{{body.event}}">+ body.event</span>
-          </div>
-          <textarea id="epBodyInput" name="response_body" class="form-control code-font" style="margin-top:6px; min-height:120px;">{
-  "status": "ok",
-  "request_id": "@{{req.id}}",
-  "received_at": "@{{timestamp_iso}}"
-}</textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create Endpoint</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Modal: Add Callback Rule -->
-<div id="modalAddCallback" class="modal-backdrop">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3 class="modal-title">Add Automated Callback Rule</h3>
-      <button class="modal-close">&times;</button>
-    </div>
-    <form id="formAddCallback">
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Attached Endpoint</label>
-          <select id="cbEndpointId" name="endpoint_id" class="form-control" required></select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Rule Label</label>
-          <input type="text" name="name" class="form-control" placeholder="e.g. Payment Microservice Relay" required>
-        </div>
-
-        <div class="grid-2">
-          <div class="form-group">
-            <label class="form-label">HTTP Method</label>
-            <select name="http_method" class="form-control">
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
-              <option value="PATCH">PATCH</option>
-              <option value="GET">GET</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Delay (Seconds)</label>
-            <input type="number" name="delay_seconds" class="form-control" value="0" min="0" max="300">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            <span>Target URL</span>
-            <span class="form-hint">Static or dynamic e.g. <code>@{{body.callback_url}}</code></span>
-          </label>
-          <input type="text" name="target_url" class="form-control code-font" placeholder="https://api.myapp.com/webhook or @{{body.callback_url}}" required>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Payload Mode</label>
-          <select name="payload_mode" class="form-control">
-            <option value="template">Custom JSON Template</option>
-            <option value="passthrough">Passthrough (Forward exact incoming payload)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Payload Template</label>
-          <textarea name="payload_template" class="form-control code-font" style="min-height:110px;">{
-  "event": "WEBHOOK_RELAY",
-  "source_request_id": "@{{req.id}}",
-  "processed_at": "@{{timestamp_iso}}",
-  "data": @{{body}}
-}</textarea>
-        </div>
-
-        <div class="form-group" style="background:var(--bg-canvas); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" name="hmac_enabled">
-            <span style="font-size:0.84rem; font-weight:600;">Sign Outbound Request with HMAC</span>
-          </label>
-          <div class="grid-2" style="margin-top:10px;">
-            <input type="text" name="hmac_secret" class="form-control code-font" placeholder="HMAC Secret Key">
-            <input type="text" name="hmac_header_name" class="form-control code-font" placeholder="Header Name" value="X-Signature-256">
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Callback Rule</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <!-- Modal: Replay Request -->
 <div id="modalReplay" class="modal-backdrop">

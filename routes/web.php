@@ -18,6 +18,7 @@ Route::prefix('api')->group(function () {
     // Endpoints
     Route::get('/endpoints', [DashboardApiController::class, 'getEndpoints']);
     Route::post('/endpoints', [DashboardApiController::class, 'createEndpoint']);
+    Route::post('/endpoints/test-eval', [DashboardApiController::class, 'testEvaluateEndpoint']);
     Route::put('/endpoints/{id}', [DashboardApiController::class, 'updateEndpoint']);
     Route::delete('/endpoints/{id}', [DashboardApiController::class, 'deleteEndpoint']);
 
@@ -30,6 +31,7 @@ Route::prefix('api')->group(function () {
 
     // Callback Rules
     Route::get('/callback-rules', [DashboardApiController::class, 'getCallbackRules']);
+    Route::post('/callback-rules/preview', [DashboardApiController::class, 'previewCallbackRule']);
     Route::post('/callback-rules', [DashboardApiController::class, 'createCallbackRule']);
     Route::put('/callback-rules/{id}', [DashboardApiController::class, 'updateCallbackRule']);
     Route::delete('/callback-rules/{id}', [DashboardApiController::class, 'deleteCallbackRule']);

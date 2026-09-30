@@ -115,4 +115,58 @@ class WebhookIngestionTest extends TestCase
             'target_url' => 'https://external-api.test/webhook',
         ]);
     }
+
+    public function test_validates_required_parameters_and_rejects_missing_or_invalid(): void
+    {
+        $endpoint = Endpoint::create([
+            'name' => 'Validation Endpoint',
+            'slug' => 'val-ep',
+            'response_status' => 200,
+            'response_body' => '{"ok": true}',
+            'required_params' => [
+                ['name' => 'token', 'source' => 'query', 'type' => 'string', 'error_message' => 'Query token is missing'],
+                ['name' => 'amount', 'source' => 'body', 'type' => 'number', 'error_message' => 'Amount must be numeric'],
+            ],
+            'is_active' => true,
+        ]);
+
+        // Missing both -> 422 with errors
+        $resFail = $this->postJson("/hook/{$endpoint->slug}", ['note' => 'hello']);
+        $resFail->assertStatus(422);
+        $resFail->assertJsonPath('error', 'Validation Failed');
+        $resFail->assertJsonPath('errors.token', 'Query token is missing');
+        $resFail->assertJsonPath('errors.amount', 'Amount must be numeric');
+
+        // Request still recorded in inspector table
+        $this->assertDatabaseHas('webhook_requests', [
+            'endpoint_id' => $endpoint->id,
+            'response_status' => 422,
+        ]);
+
+        // Valid query & body -> 200
+        $resPass = $this->postJson("/hook/{$endpoint->slug}?token=secret123", ['amount' => 50]);
+        $resPass->assertStatus(200);
+        $resPass->assertJsonPath('ok', true);
+    }
+
+    public function test_returns_dynamic_response_from_query_and_body_params(): void
+    {
+        $endpoint = Endpoint::create([
+            'name' => 'Echo Params Endpoint',
+            'slug' => 'echo-params-ep',
+            'response_status' => 200,
+            'response_body' => '{"customer": "{{query.customer_id}}", "order": "{{param.order_no}}", "all_query": {{query}}}',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson("/hook/{$endpoint->slug}?customer_id=cus_42&order_no=ORD-99", [
+            'status' => 'paid',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('customer', 'cus_42');
+        $response->assertJsonPath('order', 'ORD-99');
+        $response->assertJsonPath('all_query.customer_id', 'cus_42');
+        $response->assertJsonPath('all_query.order_no', 'ORD-99');
+    }
 }

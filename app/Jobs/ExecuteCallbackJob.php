@@ -37,10 +37,17 @@ class ExecuteCallbackJob implements ShouldQueue
         DynamicTemplateEngine $templateEngine,
         HmacSignatureService $hmacService
     ): void {
+        $paramsMap = array_merge(
+            $this->webhookRequest->query_params ?? [],
+            is_array($this->webhookRequest->parsed_body) ? $this->webhookRequest->parsed_body : []
+        );
+
         $context = [
             'body' => $this->webhookRequest->parsed_body ?? [],
             'headers' => $this->webhookRequest->headers ?? [],
             'query' => $this->webhookRequest->query_params ?? [],
+            'param' => $paramsMap,
+            'params' => $paramsMap,
             'req' => [
                 'id' => $this->webhookRequest->id,
                 'ip' => $this->webhookRequest->ip_address,

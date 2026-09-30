@@ -8,6 +8,7 @@ use App\Models\CallbackRule;
 use App\Models\Endpoint;
 use App\Models\OutboundDispatchLog;
 use App\Models\WebhookRequest;
+use App\Services\DynamicTemplateEngine;
 use App\Services\WebhookDispatcherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class DashboardApiController extends Controller
 {
     public function __construct(
-        protected WebhookDispatcherService $dispatcherService
+        protected WebhookDispatcherService $dispatcherService,
+        protected DynamicTemplateEngine $templateEngine
     ) {}
 
     /**
@@ -49,6 +51,11 @@ class DashboardApiController extends Controller
             'response_headers' => 'nullable|array',
             'response_body' => 'nullable|string',
             'conditional_rules' => 'nullable|array',
+            'required_params' => 'nullable|array',
+            'required_params.*.name' => 'required|string|max:100',
+            'required_params.*.source' => 'required|string|in:query,body,header',
+            'required_params.*.type' => 'nullable|string|in:string,number,integer,email,url,boolean',
+            'required_params.*.error_message' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
         ]);
 
@@ -65,6 +72,7 @@ class DashboardApiController extends Controller
             'response_headers' => $validated['response_headers'] ?? ['Content-Type' => 'application/json'],
             'response_body' => $validated['response_body'] ?? "{\n  \"status\": \"ok\",\n  \"request_id\": \"{{req.id}}\"\n}",
             'conditional_rules' => $validated['conditional_rules'] ?? [],
+            'required_params' => $validated['required_params'] ?? [],
             'is_active' => $validated['is_active'] ?? true,
         ]);
 
@@ -87,6 +95,11 @@ class DashboardApiController extends Controller
             'response_headers' => 'nullable|array',
             'response_body' => 'nullable|string',
             'conditional_rules' => 'nullable|array',
+            'required_params' => 'nullable|array',
+            'required_params.*.name' => 'required|string|max:100',
+            'required_params.*.source' => 'required|string|in:query,body,header',
+            'required_params.*.type' => 'nullable|string|in:string,number,integer,email,url,boolean',
+            'required_params.*.error_message' => 'nullable|string|max:255',
             'is_active' => 'sometimes|boolean',
         ]);
 
@@ -104,6 +117,79 @@ class DashboardApiController extends Controller
         $endpoint->delete();
 
         return response()->json(['message' => 'Endpoint deleted successfully']);
+    }
+
+    /**
+     * Test evaluate a dynamic response against sample request context.
+     */
+    public function testEvaluateEndpoint(Request $request): JsonResponse
+    {
+        $rawSampleBody = $request->input('sample_body', '{}');
+        $parsedBody = json_decode((string) $rawSampleBody, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $parsedBody = [];
+        }
+
+        $sampleQuery = $request->input('sample_query', [
+            'token' => 'tok_live_9941a',
+            'customer_id' => 'cus_8820',
+            'tier' => 'enterprise',
+            'order_id' => 'ord_77192',
+            'amount' => '250.00',
+        ]);
+        if (is_string($sampleQuery)) {
+            $decodedQuery = json_decode($sampleQuery, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decodedQuery)) {
+                $sampleQuery = $decodedQuery;
+            } else {
+                parse_str($sampleQuery, $parsedQuery);
+                $sampleQuery = $parsedQuery ?: [];
+            }
+        }
+
+        $paramsMap = array_merge($sampleQuery, is_array($parsedBody) ? $parsedBody : []);
+
+        $context = [
+            'body' => $parsedBody,
+            'headers' => $request->input('sample_headers', ['content-type' => 'application/json']),
+            'query' => $sampleQuery,
+            'param' => $paramsMap,
+            'params' => $paramsMap,
+            'req' => [
+                'id' => (string) Str::uuid(),
+                'ip' => '127.0.0.1',
+                'method' => $request->input('sample_method', 'POST'),
+                'url' => url('/hook/preview'),
+                'path' => '/hook/preview',
+            ],
+        ];
+
+        $rules = $request->input('conditional_rules', []);
+        $matched = $this->templateEngine->evaluateRules($rules, $context);
+
+        $status = $this->templateEngine->resolveStatusCode(
+            $request->input('response_status', 200),
+            $context,
+            $rules
+        );
+
+        $bodyTemplate = $matched['body'] ?? $request->input('response_body', '');
+        $renderedBody = $this->templateEngine->render($bodyTemplate, $context);
+
+        $rawHeaders = $matched['headers'] ?? $request->input('response_headers', ['Content-Type' => 'application/json']);
+        $renderedHeaders = [];
+        if (is_array($rawHeaders)) {
+            foreach ($rawHeaders as $k => $v) {
+                $renderedHeaders[$k] = $this->templateEngine->render((string) $v, $context);
+            }
+        }
+
+        return response()->json([
+            'evaluated_status' => $status,
+            'evaluated_headers' => $renderedHeaders,
+            'evaluated_body' => $renderedBody,
+            'matched_rule' => $matched['matched_rule'] ?? null,
+        ]);
     }
 
     /**
@@ -239,13 +325,71 @@ class DashboardApiController extends Controller
      */
     public function getCallbackRules(Request $request): JsonResponse
     {
-        $query = CallbackRule::with('endpoint:id,name,slug');
+        $query = CallbackRule::with([
+            'endpoint:id,name,slug',
+            'callbackLogs' => fn ($q) => $q->latest()->limit(1),
+        ])->withCount('callbackLogs');
 
         if ($request->filled('endpoint_id')) {
             $query->where('endpoint_id', $request->integer('endpoint_id'));
         }
 
-        return response()->json($query->get());
+        return response()->json($query->latest()->get());
+    }
+
+    /**
+     * Preview dynamic target URL and payload resolution for a callback rule.
+     */
+    public function previewCallbackRule(Request $request): JsonResponse
+    {
+        $targetUrl = $request->input('target_url', '');
+        $payloadTemplate = $request->input('payload_template', '');
+        $payloadMode = $request->input('payload_mode', 'template');
+        $customHeaders = $request->input('custom_headers', []);
+
+        $sampleBody = [
+            'event' => 'order.completed',
+            'id' => 'evt_'.Str::random(8),
+            'callback_url' => 'https://api.myclient.com/webhook/relay',
+            'amount' => 199.50,
+            'customer' => ['id' => 'cus_8892', 'name' => 'Alice Doe', 'email' => 'alice@example.com'],
+        ];
+
+        $context = [
+            'body' => $sampleBody,
+            'headers' => ['content-type' => 'application/json', 'x-request-id' => 'req_demo_101', 'x-api-key' => 'api_key_secret_998'],
+            'query' => ['token' => 'sample_token_abc', 'client_id' => 'cl_441'],
+            'param' => ['token' => 'sample_token_abc', 'amount' => 199.50],
+            'params' => ['token' => 'sample_token_abc', 'amount' => 199.50],
+            'req' => [
+                'id' => (string) Str::uuid(),
+                'ip' => '127.0.0.1',
+                'method' => 'POST',
+                'url' => url('/hook/preview'),
+                'path' => '/hook/preview',
+            ],
+        ];
+
+        $resolvedUrl = $this->templateEngine->render($targetUrl, $context);
+        $resolvedPayload = '';
+        if ($payloadMode === 'template') {
+            $resolvedPayload = $this->templateEngine->render($payloadTemplate, $context);
+        } elseif ($payloadMode === 'passthrough') {
+            $resolvedPayload = json_encode($sampleBody, JSON_PRETTY_PRINT);
+        }
+
+        $resolvedHeaders = [];
+        if (is_array($customHeaders)) {
+            foreach ($customHeaders as $k => $v) {
+                $resolvedHeaders[$k] = $this->templateEngine->render((string) $v, $context);
+            }
+        }
+
+        return response()->json([
+            'resolved_url' => $resolvedUrl,
+            'resolved_payload' => $resolvedPayload,
+            'resolved_headers' => $resolvedHeaders,
+        ]);
     }
 
     public function createCallbackRule(Request $request): JsonResponse
@@ -393,45 +537,31 @@ class DashboardApiController extends Controller
     public function stream(Request $request): StreamedResponse
     {
         return response()->stream(function () {
-            // Disable output buffering
             while (ob_get_level() > 0) {
                 ob_end_flush();
             }
 
             echo ": connected\n\n";
-            flush();
 
-            $lastCheck = now()->subSeconds(2)->timestamp;
+            $since = (int) request('since', now()->subSeconds(4)->timestamp);
+            $events = Cache::get('hookforge_recent_events', []);
+            $newEvents = array_filter($events, fn ($e) => ($e['timestamp'] ?? 0) >= $since);
 
-            // Stream for 25 seconds before connection re-establishes (standard SSE pattern)
-            $startTime = time();
-            while (time() - $startTime < 25) {
-                if (connection_aborted()) {
-                    break;
+            if (! empty($newEvents)) {
+                foreach ($newEvents as $event) {
+                    echo "event: {$event['type']}\n";
+                    echo 'data: '.json_encode($event)."\n\n";
                 }
-
-                $events = Cache::get('hookforge_recent_events', []);
-                $newEvents = array_filter($events, fn ($e) => ($e['timestamp'] ?? 0) >= $lastCheck);
-
-                if (! empty($newEvents)) {
-                    foreach ($newEvents as $event) {
-                        echo "event: {$event['type']}\n";
-                        echo 'data: '.json_encode($event)."\n\n";
-                    }
-                    $lastCheck = now()->timestamp;
-                    flush();
-                } else {
-                    // Send heartbeat ping to keep connection alive
-                    echo ": ping\n\n";
-                    flush();
-                }
-
-                sleep(1);
+            } else {
+                echo ": ping\n\n";
             }
+
+            echo "retry: 1500\n\n";
+            flush();
         }, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache, no-transform',
-            'Connection' => 'keep-alive',
+            'Connection' => 'close',
             'X-Accel-Buffering' => 'no',
         ]);
     }

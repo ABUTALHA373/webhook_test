@@ -17,7 +17,59 @@ class DynamicTemplateEngine
             return '';
         }
 
-        return preg_replace_callback('/\{\{\s*([\w\.\-]+)\s*\}\}/', function ($matches) use ($context) {
+        // Normalize any literal @{{token}} to {{token}}
+        $template = str_replace('@{{', '{{', $template);
+
+        // 1. Process functional helpers: {{default(x, y)}}, {{upper(x)}}, {{lower(x)}}, {{json(x)}}
+        $template = preg_replace_callback('/\{\{\s*(default|upper|lower|json|ternary)\s*\(([^)]+)\)\s*\}\}/', function ($matches) use ($context) {
+            $func = $matches[1];
+            $args = array_map('trim', explode(',', $matches[2]));
+
+            switch ($func) {
+                case 'default':
+                    $val = $this->resolveVariable($args[0], $context);
+                    $fallback = isset($args[1]) ? trim($args[1], '\'"') : '';
+
+                    return ($val !== null && $val !== '') ? (string) $val : $fallback;
+
+                case 'upper':
+                    $val = (string) $this->resolveVariable($args[0], $context);
+
+                    return strtoupper($val);
+
+                case 'lower':
+                    $val = (string) $this->resolveVariable($args[0], $context);
+
+                    return strtolower($val);
+
+                case 'json':
+                    $val = $this->resolveVariable($args[0], $context);
+
+                    return json_encode($val, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+                case 'ternary':
+                    $conditionVal = $this->resolveVariable($args[0], $context);
+                    $truthy = isset($args[1]) ? trim($args[1], '\'"') : 'true';
+                    $falsy = isset($args[2]) ? trim($args[2], '\'"') : 'false';
+
+                    return ! empty($conditionVal) ? $truthy : $falsy;
+
+                default:
+                    return $matches[0];
+            }
+        }, $template);
+
+        // 2. Process variables with fallback syntax: {{body.code || 200}}
+        $template = preg_replace_callback('/\{\{\s*([\w\.\-]+)\s*\|\|\s*([^}]+)\s*\}\}/', function ($matches) use ($context) {
+            $key = trim($matches[1]);
+            $fallback = trim($matches[2], '\'" ');
+            $val = $this->resolveVariable($key, $context);
+
+            return ($val !== null && $val !== '') ? (string) $val : $fallback;
+        }, $template);
+
+        // 3. Process standard variables: {{body.x}}
+        return preg_replace_callback('/\{\{\s*([\w\.\-\[\]]+)\s*\}\}/', function ($matches) use ($context) {
             $key = trim($matches[1]);
             $val = $this->resolveVariable($key, $context);
 
@@ -70,12 +122,68 @@ class DynamicTemplateEngine
             return Str::random(12);
         }
 
-        return data_get($context, $path);
+        // Support array bracket syntax e.g. items[0].id -> items.0.id
+        $normalizedPath = str_replace(['[', ']'], ['.', ''], $path);
+
+        $val = data_get($context, $normalizedPath);
+        if ($val !== null) {
+            return $val;
+        }
+
+        // Support param.<name> / params.<name> (checking query first, then body)
+        if (str_starts_with($normalizedPath, 'param.')) {
+            $subKey = substr($normalizedPath, 6);
+            $val = data_get($context, 'query.'.$subKey) ?? data_get($context, 'body.'.$subKey);
+            if ($val !== null) {
+                return $val;
+            }
+        }
+        if (str_starts_with($normalizedPath, 'params.')) {
+            $subKey = substr($normalizedPath, 7);
+            $val = data_get($context, 'query.'.$subKey) ?? data_get($context, 'body.'.$subKey);
+            if ($val !== null) {
+                return $val;
+            }
+        }
+
+        // Direct fallback: check query, body, and headers directly if path has no prefix (e.g. {{customer_id}})
+        return data_get($context, 'query.'.$normalizedPath)
+            ?? data_get($context, 'body.'.$normalizedPath)
+            ?? data_get($context, 'headers.'.$normalizedPath);
+    }
+
+    /**
+     * Dynamically resolve the response status code.
+     * Checks conditional rules first, then fallback/template interpolation.
+     *
+     * @param  array<string, mixed>  $context
+     * @param  array<int, array<string, mixed>>|null  $rules
+     */
+    public function resolveStatusCode(int|string|null $configuredStatus, array $context, ?array $rules = null): int
+    {
+        // Check conditional rules
+        $matched = $this->evaluateRules($rules, $context);
+        if ($matched && ! empty($matched['status'])) {
+            return (int) $matched['status'];
+        }
+
+        // Check if configuredStatus is a template e.g. {{body.status_code || 200}}
+        if (is_string($configuredStatus) && str_contains($configuredStatus, '{{')) {
+            $rendered = $this->render($configuredStatus, $context);
+            if (is_numeric($rendered) && (int) $rendered >= 100 && (int) $rendered <= 599) {
+                return (int) $rendered;
+            }
+        }
+
+        if (is_numeric($configuredStatus) && (int) $configuredStatus >= 100 && (int) $configuredStatus <= 599) {
+            return (int) $configuredStatus;
+        }
+
+        return 200;
     }
 
     /**
      * Evaluate conditional rules against incoming request context.
-     * Returns matching rule with status & body overrides if any rule matches.
      *
      * @param  array<int, array<string, mixed>>|null  $rules
      * @param  array<string, mixed>  $context
@@ -112,7 +220,7 @@ class DynamicTemplateEngine
     }
 
     /**
-     * Match a single condition.
+     * Match a single condition with rich operators.
      */
     protected function matchCondition(mixed $actual, string $operator, mixed $expected): bool
     {
@@ -128,6 +236,9 @@ class DynamicTemplateEngine
             case 'contains':
                 return is_string($actual) && str_contains(strtolower($actual), strtolower((string) $expected));
 
+            case 'not_contains':
+                return is_string($actual) && ! str_contains(strtolower($actual), strtolower((string) $expected));
+
             case 'starts_with':
                 return is_string($actual) && str_starts_with($actual, (string) $expected);
 
@@ -138,7 +249,8 @@ class DynamicTemplateEngine
                 return $actual !== null && $actual !== '';
 
             case 'does_not_exist':
-                return $actual === null || $actual === '';
+            case 'empty':
+                return $actual === null || $actual === '' || (is_array($actual) && empty($actual));
 
             case 'gt':
             case '>':
@@ -155,6 +267,9 @@ class DynamicTemplateEngine
             case 'lte':
             case '<=':
                 return is_numeric($actual) && is_numeric($expected) && (float) $actual <= (float) $expected;
+
+            case 'regex':
+                return is_string($actual) && @preg_match('/'.str_replace('/', '\/', (string) $expected).'/', $actual) === 1;
 
             default:
                 return false;
