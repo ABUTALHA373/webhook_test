@@ -63,4 +63,12 @@ class CallbackRule extends Model
     {
         return $this->hasMany(CallbackLog::class);
     }
+
+    /**
+     * @return HasMany<CallbackLog, $this>
+     */
+    public function callbackLogs(): HasMany
+    {
+        return $this->hasMany(CallbackLog::class);
+    }
 }

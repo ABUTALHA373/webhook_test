@@ -87,4 +87,26 @@ class DashboardApiTest extends TestCase
             'response_status' => 200,
         ]);
     }
+
+    public function test_can_list_and_create_callback_rules(): void
+    {
+        $ep = Endpoint::create(['name' => 'Demo Ep', 'slug' => 'demo-ep', 'response_status' => 200]);
+
+        $res = $this->postJson('/api/callback-rules', [
+            'endpoint_id' => $ep->id,
+            'name' => 'Relay Webhook',
+            'target_url' => 'https://example.com/relay',
+            'http_method' => 'POST',
+            'payload_mode' => 'template',
+            'payload_template' => '{"relay": true}',
+        ]);
+
+        $res->assertStatus(201);
+        $this->assertDatabaseHas('callback_rules', ['name' => 'Relay Webhook']);
+
+        $listRes = $this->getJson('/api/callback-rules');
+        $listRes->assertStatus(200);
+        $listRes->assertJsonFragment(['name' => 'Relay Webhook']);
+    }
 }
+

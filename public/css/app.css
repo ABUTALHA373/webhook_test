@@ -279,58 +279,6 @@ body {
   gap: 16px;
 }
 
-.endpoint-picker-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: var(--bg-surface-elevated);
-  border: 1px solid var(--border-medium);
-  padding: 4px 12px;
-  border-radius: 8px;
-}
-
-.endpoint-label {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.endpoint-select {
-  background: transparent;
-  border: none;
-  color: var(--text-main);
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
-  outline: none;
-  cursor: pointer;
-}
-
-.endpoint-select option {
-  background-color: var(--bg-surface-elevated);
-  color: var(--text-main);
-}
-
-.url-copy-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  padding: 5px 12px;
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--color-info);
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.url-copy-pill:hover {
-  border-color: var(--color-info);
-  background-color: var(--color-info-bg);
-}
 
 /* Nav Tabs */
 .app-nav {
