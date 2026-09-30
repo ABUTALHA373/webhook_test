@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "C:\\ServBay\\packages\\php\\current\\php.exe",
+            "args": [
+                "D:\\Personal\\webhook_test\\artisan",
+                "boost:mcp"
+            ]
+        }
+    }
+}
